@@ -187,7 +187,7 @@ def _init_node_params(argv, node_name):
 
 _init_node_args = None
 
-def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=False, disable_rosout=False, disable_signals=False, xmlrpc_port=0, tcpros_port=0):
+def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=False, disable_rosout=False, disable_signals=False, disable_logging=False, xmlrpc_port=0, tcpros_port=0):
     """
     Register client node with the master under the specified name.
     This MUST be called from the main Python thread unless
@@ -229,8 +229,15 @@ def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=
 
         NOTE: disable_signals is overridden to True if
         roslib.is_interactive() is True.
-        
+
     @type  disable_signals: bool
+
+    @param disable_logging: If True, rospy will not reconfigure python
+        logging at all. Any/all logging configuration must therefore be
+        performed independently of rospy. This is useful if you are
+        integrating rospy into existing code and do not want your logging
+        setup discarded you invoke init_node. 
+    @type  disable_logging: bool
     
     @param disable_rostime: for internal testing only: suppresses
         automatic subscription to rostime
@@ -270,7 +277,7 @@ def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=
     # #972: allow duplicate init_node args if calls are identical
     # NOTE: we don't bother checking for node name aliases (e.g. 'foo' == '/foo').
     if _init_node_args:
-        if _init_node_args != (name, argv, anonymous, log_level, disable_rostime, disable_signals):
+        if _init_node_args != (name, argv, anonymous, log_level, disable_rostime, disable_signals, disable_logging):
             raise rospy.exceptions.ROSException("rospy.init_node() has already been called with different arguments: "+str(_init_node_args))
         else:
             return #already initialized
@@ -278,7 +285,7 @@ def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=
     # for scripting environments, we don't want to use the ROS signal
     # handlers
     disable_signals = disable_signals or roslib.is_interactive()
-    _init_node_args = (name, argv, anonymous, log_level, disable_rostime, disable_signals)
+    _init_node_args = (name, argv, anonymous, log_level, disable_rostime, disable_signals, disable_logging)
         
     if not disable_signals:
         # NOTE: register_signals must be called from main thread
@@ -306,7 +313,11 @@ def init_node(name, argv=None, anonymous=False, log_level=None, disable_rostime=
 
     # use rosgraph version of resolve_name to avoid remapping
     resolved_node_name = rosgraph.names.resolve_name(name, rospy.core.get_caller_id())
-    rospy.core.configure_logging(resolved_node_name)
+
+    # configure logging unless we've been asked not to
+    if not disable_logging:
+       rospy.core.configure_logging(resolved_node_name)
+
     # #1810
     rospy.names.initialize_mappings(resolved_node_name)
     
